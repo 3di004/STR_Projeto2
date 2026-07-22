@@ -1,12 +1,20 @@
 #include <Arduino.h>
 
-#define botao1 4
-#define botao2 16
-#define botao3 17
-#define led1 2
-#define led2 5
-#define led3 18
-#define led4 19
+#define B1 4	//Botão 1
+#define B2 5	//Botão 2
+#define B3 16	//Botão 3
+#define L1 17	//LED 1
+#define L2 18	//LED 2
+#define L3 19	//LED 3
+#define L4 21	//LED 4
+
+//Configuração dos botões
+bool leitB1;
+bool leitB2;
+bool leitB3;
+bool leitB1ant = true;
+bool leitB2ant = true;
+bool leitB3ant = true;
 
 //Configurações do sistema
 int capacidade_patio = 2;
@@ -18,23 +26,24 @@ void trem_produtor(int);
 
 void setup() {
 	Serial.begin(9600); //Iniciando comunicação serial para monitoramento do sistema.
-	pinMode(botao1, INPUT_PULLUP); //Entrada digital:
-	pinMode(botao2, INPUT_PULLUP); //Entrada digital:
-	pinMode(botao3, INPUT_PULLUP); //Entrada digital:
-	pinMode(led1, OUTPUT); //Saída digital:
-	pinMode(led2, OUTPUT); //Saída digital:
-	pinMode(led3, OUTPUT); //Saída digital:
-	pinMode(led4, OUTPUT); //Saída digital:
+	pinMode(B1, INPUT_PULLUP); //Entrada digital:
+	pinMode(B2, INPUT_PULLUP); //Entrada digital:
+	pinMode(B3, INPUT_PULLUP); //Entrada digital:
+	pinMode(L1, OUTPUT); //Saída digital:
+	pinMode(L2, OUTPUT); //Saída digital:
+	pinMode(L3, OUTPUT); //Saída digital:
+	pinMode(L4, OUTPUT); //Saída digital:
 }
 
 void loop() {
-	if (!botao1){
-		trem_produtor(1);
-	} else if (!botao2){
-		trem_produtor(2);
-	} else if (!botao3){
-		trem_produtor(3);
+	leitB1 = digitalRead(B1);
+	if (!leitB1){
+		//trem_produtor(1);
+		digitalWrite(L1, HIGH);
+	} else {
+		digitalWrite(L1, LOW);
 	}
+	//leitB1ant = leitB1;
 }
 
 void trem_produtor(int linha) {
