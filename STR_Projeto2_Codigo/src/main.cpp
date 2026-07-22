@@ -1,22 +1,39 @@
 #include <Arduino.h>
-#include <iostream>
 
 //Configurações do sistema
 int capacidade_patio = 2;
-SemaphoreHandle_t vagas_patio = xSemaphoreCreateBinary();
-SemaphoreHandle_t trilho_compartilhado = xSemaphoreCreateCounting(capacidade_patio, 0);
+int total_no_patio = 0;
+SemaphoreHandle_t vagas_patio = xSemaphoreCreateCounting(capacidade_patio, capacidade_patio); //Semáforo controlador das vagas do pátio, com a capacidade devida.
+SemaphoreHandle_t trilho_compartilhado = xSemaphoreCreateBinary(); //Semáforo para o trilho compartilhado, de capacidade 1.
 
-int trem_produtor(int);
+void trem_produtor(int);
 
 void setup() {
-	Serial.begin(9600); //Iniciando comunicação serial para monitoramento do sistema
+	Serial.begin(9600); //Iniciando comunicação serial para monitoramento do sistema.
 	pinMode(3, OUTPUT); //Saída digital:
 	pinMode(4, OUTPUT); //Saída digital:
 }
 
 void loop() {
+	
 }
 
-int trem_produtor(int linha) {
-	return linha;
+void trem_produtor(int linha) {
+	Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem carregado e pronto para partir. Solicitando entrada no trilho compartilhado...");
+
+	if (xSemaphoreTake(trilho_compartilhado, portMAX_DELAY) == pdTRUE){ //O if só é executado quando o trilho estiver vago.
+		Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem entrou no trilho compartilhado.");
+		vTaskDelay(pdMS_TO_TICKS(2500)); //Tempo de travessia do trilho.
+		Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem chegou ao fim do trilho. Aguardando pela descarga no pátio.");
+		
+		if (xSemaphoreTake(vagas_patio, portMAX_DELAY) == pdTRUE){ //No final do trilho compatilhado, o trem espera a entrada no pátio. Durante esse tempo, outro trem não pode entrar no trilho compartilhado.
+			xSemaphoreGive(trilho_compartilhado); //O trem entra no pátio e o trilho compatilhado torna-se disponível
+			total_no_patio++;
+			Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem descarregando...");
+			vTaskDelay(pdMS_TO_TICKS(3000)); //Tempo que o trem passa descarregando.
+			xSemaphoreGive(vagas_patio);
+			Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem descarregou! Saindo do pátio e voltando à mina.");
+			total_no_patio--;
+		}
+	}
 }
