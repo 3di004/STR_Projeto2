@@ -13,7 +13,7 @@ YouTube: <youtube.com>
 
 ## **Descrição**
 
-> - **Linguagem usada**: C++
+> - **Linguagem usada**: C
 > - **Microcontrolador utilizado**: Esp 32 Devkit 1
 
 ### **> Visão Geral**
