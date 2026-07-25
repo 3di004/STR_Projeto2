@@ -82,7 +82,7 @@ void trem_produtor(void *pvParameters){
 		if (xSemaphoreTake(vagas_patio, portMAX_DELAY) == pdTRUE){ //No final do trilho compatilhado, o trem espera a entrada no pátio. Durante esse tempo, outro trem não pode entrar no trilho compartilhado.
 			xSemaphoreGive(trilho_compartilhado); //O trem entra no pátio e o trilho compatilhado torna-se disponível.
 			total_no_patio++;
-			Serial.print("[Linha "); Serial.print(linha); Serial.print("] Trem entrou no patio. Descarregando... (Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+			Serial.print("[Linha "); Serial.print(linha); Serial.print("] Trem entrou no patio. Descarregando... (Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio); Serial.print(")");
 			digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 			digitalWrite(vetorLeds[linha - 1], HIGH); //O Led do trem da linha correspondente acende, indicando sua presença no pátio de descarga.
 
@@ -90,7 +90,7 @@ void trem_produtor(void *pvParameters){
 
 			xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
 			total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
-			Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina.");
+			Serial.print("[Linha "); Serial.print(linha); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina. (Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio); Serial.print(")");
 			digitalWrite(vetorLeds[linha - 1], LOW);
 
 			switch (linha){	//Switch para definir a Handle da tarefa respectiva como NULL, indicando seu apagamento do sistema.
