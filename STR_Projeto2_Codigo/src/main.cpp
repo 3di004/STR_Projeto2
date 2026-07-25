@@ -7,7 +7,7 @@
 #define Led1 23	//LED 1
 #define Led2 22	//LED 2
 #define Led3 21	//LED 3
-#define Led4 19	//LED 4
+#define Led4 19	//LED 4a
 
 byte vetorLeds[3] = {Led1, Led2, Led3}; //Vetor para acender os respectivos leds dentro das tasks criadas.
 

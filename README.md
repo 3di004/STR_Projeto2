@@ -18,11 +18,11 @@ YouTube: <youtube.com>
 
 ### **> Visão Geral**
 
-O sistema foi implementado fisicamente usando o microprocessador Esp32, com 3 botões e 4 leds. É mostrado pela figura a seguir o circuito na protoboard.
+O sistema foi implementado fisicamente usando o microprocessador Esp32, com 4 botões e 4 leds. É mostrado pela figura a seguir o circuito na protoboard.
 
-![](Figuras/Teste.png)
+![](Figuras/Circuito_Fig01.jpeg)
 
-Cada botão representa o sistema mandando um trem da mina já carregado. Cada LED representa a vaga do trilho compartilhado e as três vagas do pátio de descarga.
+Três botões representam o sistema mandando um trem da mina já carregado e um botão é usado para determinar o momento de descarregamento de um dos 3 trens de forma aleatorizada. Cada LED representa a vaga do trilho compartilhado e as três vagas do pátio de descarga.
 
 ### **> Objetivos**
 
@@ -30,3 +30,4 @@ Retomar o projeto anterior, implementando-o em uma plataforma prática usando o 
 
 ### **> Funcionamento do código**
 
+O código utiliza o FreeRTOS para criar tarefas independentes que rodam de forma escalonada em um núcleo do processador do Esp32. Usando semáforos e mutexes, o sistema segue funcionando se auto gerenciando.
