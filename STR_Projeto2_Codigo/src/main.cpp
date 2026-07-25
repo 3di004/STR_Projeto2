@@ -30,6 +30,7 @@ typedef struct { //Struct para definir atributos das configurações de cada task 
 
 ConfigTask_t configTask1, configTask2, configTask3; //Variáveis de configuração (struct com 3 atributos)
 
+//Declaração de funções
 void trem_produtor(void*); //Função a ser repassada como tasks ao FreeRTOS, representando cada trem das linhas.
 void agente_descarregador(void*); //Função para liberação do pátio.
 
@@ -108,14 +109,13 @@ void trem_produtor(void *pvParameters){
 					digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 					digitalWrite(vetorLeds[(config -> id) - 1], HIGH); //O Led do trem da config -> id correspondente acende, indicando sua presença no pátio de descarga.
 
-					xSemaphoreTake(botao_agente_descarregador, portMAX_DELAY); //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando.
-
-					xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
-					total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
-					Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina.");
-					Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
-					digitalWrite(vetorLeds[(config -> id) - 1], LOW);
-					
+					if (xSemaphoreTake(botao_agente_descarregador, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
+						xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
+						total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
+						Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina.");
+						Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+						digitalWrite(vetorLeds[(config -> id) - 1], LOW);
+					}
 				}
 			}
 		}
