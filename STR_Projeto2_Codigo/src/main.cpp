@@ -21,6 +21,7 @@ int delayDebounce = 750; //ms
 SemaphoreHandle_t vagas_patio = xSemaphoreCreateCounting(capacidade_patio, capacidade_patio); //Semáforo controlador das vagas do pátio, com a capacidade devida de 2 trens.
 SemaphoreHandle_t trilho_compartilhado = xSemaphoreCreateCounting(1, 1); //Semáforo para o trilho compartilhado, de capacidade 1.
 SemaphoreHandle_t botao_agente_descarregador; //Semáforo para permitir descarga dos trens.
+SemaphoreHandle_t serialMutex; //Mutex para controle de envio de mensagens ao Serial.
 
 typedef struct { //Struct para definir atributos das configurações de cada task a partir da função genérica trem_produtor
 	int id;
@@ -91,29 +92,45 @@ void trem_produtor(void *pvParameters){
 
 	while (true){ //loop contínuo (task sempre rodando)
 		if (xSemaphoreTake(config -> iniciar_rota, portMAX_DELAY) == pdTRUE){ //Se o semáforo iniciar_rota, do struct config estiver em 1 (botão do trem respectivo pressionado), continua
-			Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem carregado e pronto para partir. Solicitando entrada no trilho compartilhado...");
+			
+			if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
+				Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem carregado e pronto para partir. Solicitando entrada no trilho compartilhado...");
+				xSemaphoreGive(serialMutex);
+			}
 
 			if (xSemaphoreTake(trilho_compartilhado, portMAX_DELAY) == pdTRUE){ //O if só é executado quando o trilho estiver vago.
-				Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem entrou no trilho compartilhado.");
+				if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
+					Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem entrou no trilho compartilhado.");
+					xSemaphoreGive(serialMutex);
+				}
 				digitalWrite(Led4, HIGH); //Led 4 ligado demonstrando que há um trem no trilho compartilhado
 
 				vTaskDelay(pdMS_TO_TICKS(2000)); //Tempo de travessia do trilho.
 
-				Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem chegou ao fim do trilho. Aguardando pela descarga no patio.");
+				if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
+					Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem chegou ao fim do trilho. Aguardando pela entrada no patio.");
+					xSemaphoreGive(serialMutex);
+				}
 				
 				if (xSemaphoreTake(vagas_patio, portMAX_DELAY) == pdTRUE){ //No final do trilho compatilhado, o trem espera a entrada no pátio. Durante esse tempo, outro trem não pode entrar no trilho compartilhado.
 					xSemaphoreGive(trilho_compartilhado); //O trem entra no pátio e o trilho compatilhado torna-se disponível.
 					total_no_patio++;
-					Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem entrou no patio. Descarregando...");
-					Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+					if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
+						Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem entrou no patio. Descarregando...");
+						Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+						xSemaphoreGive(serialMutex);
+					}
 					digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 					digitalWrite(vetorLeds[(config -> id) - 1], HIGH); //O Led do trem da config -> id correspondente acende, indicando sua presença no pátio de descarga.
 
 					if (xSemaphoreTake(botao_agente_descarregador, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
 						xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
 						total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
-						Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina.");
-						Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+						if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
+							Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem descarregou! Saindo do patio e voltando a mina.");
+							Serial.print("[Patio] Vagas ocupadas: "); Serial.print(total_no_patio); Serial.print("/"); Serial.println(capacidade_patio);
+							xSemaphoreGive(serialMutex);
+						}
 						digitalWrite(vetorLeds[(config -> id) - 1], LOW);
 					}
 				}
@@ -136,6 +153,7 @@ void agente_descarregador(void *pvParameters){ //Função que lida com a descarga 
 	}
 
 }
+
 
 //Setup do das portas e das tasks.
 void setup(){
@@ -162,6 +180,10 @@ void setup(){
 
 	//Definição do semáforo botao_agente_descarregador.
 	botao_agente_descarregador = xSemaphoreCreateBinary();
+
+	//Definição do mutex e atribuição de 1 (Serial disponível) para controle de envio de mensagens ao Serial.
+	serialMutex = xSemaphoreCreateBinary();
+	xSemaphoreGive(serialMutex);
 
 	//Atribuição dos IDs de cada tarefa.
 	configTask1.id = 1;
