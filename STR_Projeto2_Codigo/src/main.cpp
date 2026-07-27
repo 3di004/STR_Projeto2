@@ -7,11 +7,11 @@
 #define Led1 23	//LED 1
 #define Led2 22	//LED 2
 #define Led3 21	//LED 3
-#define Led4 19	//LED 4a
+#define Led4 19	//LED 4
 
 byte vetorLeds[3] = {Led1, Led2, Led3}; //Vetor para acender os respectivos leds dentro das tasks criadas.
 
-TaskHandle_t task1Handle, task2Handle, task3Handle; //Handles das tasks
+TaskHandle_t task1Handle, task2Handle, task3Handle, task4Handle; //Handles das tasks
 
 //Configurações do sistema
 int capacidade_patio = 2; //Quantidade de vagas no pátio.
@@ -123,7 +123,7 @@ void trem_produtor(void *pvParameters){
 					digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 					digitalWrite(vetorLeds[(config -> id) - 1], HIGH); //O Led do trem da config -> id correspondente acende, indicando sua presença no pátio de descarga.
 
-					if (xSemaphoreTake(botao_agente_descarregador, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
+					if (xSemaphoreTake(config -> descarregar, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
 						xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
 						total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
 						if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
@@ -177,6 +177,9 @@ void setup(){
 	configTask1.iniciar_rota = xSemaphoreCreateBinary();
 	configTask2.iniciar_rota = xSemaphoreCreateBinary();
 	configTask3.iniciar_rota = xSemaphoreCreateBinary();
+	configTask1.descarregar = xSemaphoreCreateBinary();
+	configTask2.descarregar = xSemaphoreCreateBinary();
+	configTask3.descarregar = xSemaphoreCreateBinary();
 
 	//Definição do semáforo botao_agente_descarregador.
 	botao_agente_descarregador = xSemaphoreCreateBinary();
@@ -194,6 +197,7 @@ void setup(){
 	xTaskCreate(trem_produtor, "Task Trem 1", 2048, (void*)&configTask1, 1, &task1Handle);
 	xTaskCreate(trem_produtor, "Task Trem 2", 2048, (void*)&configTask2, 1, &task2Handle);
 	xTaskCreate(trem_produtor, "Task Trem 3", 2048, (void*)&configTask3, 1, &task3Handle);
+	xTaskCreate(agente_descarregador, "Agente Descarregador", 2048, NULL, 1, &task4Handle);
 }
 
 //Loop: inutilizado.
