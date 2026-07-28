@@ -30,7 +30,7 @@ typedef struct { //Struct para definir atributos das configurações de cada task 
 	int id;
 	SemaphoreHandle_t iniciar_rota;
 	SemaphoreHandle_t descarregar;
-	bool aguadaDescarregar;
+	bool aguardaDescarregar;
 } ConfigTask_t;
 
 ConfigTask_t configTask1, configTask2, configTask3; //Variáveis de configuração (struct com 3 atributos)
@@ -85,9 +85,9 @@ void IRAM_ATTR ISR_Bot4(){
 
 		//Lógica para avaliar quais tarefas esperam no pátio no momento dessa chamada
 		bool val1, val2, val3; //Valores booleanos paraconstruir as expressões de lógica
-		val1 = configTask1.aguadaDescarregar;
-		val2 = configTask2.aguadaDescarregar;
-		val3 = configTask3.aguadaDescarregar;
+		val1 = configTask1.aguardaDescarregar;
+		val2 = configTask2.aguardaDescarregar;
+		val3 = configTask3.aguardaDescarregar;
 		resultado = 0;
 		if ((!val1 and !val2 and val3) or (!val1 and val2 and !val3) or (val1 and !val2 and !val3)){ //Se só tem um trem esperando descarregar,
 			if (val1){xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade);}		 //descarregue-o
@@ -113,15 +113,15 @@ void IRAM_ATTR ISR_Bot4(){
 
 		switch (resultado){
 			case 1: 
-				if (configTask1.aguadaDescarregar){
+				if (configTask1.aguardaDescarregar){
 					xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade); break; //Se for 1, ativa o semáforo descarregar da tarefa 1.
 				}	
 			case 2: 
-				if (configTask2.aguadaDescarregar){
+				if (configTask2.aguardaDescarregar){
 					xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade); break; //Assim por diante.
 				}
 			case 3: 
-				if (configTask3.aguadaDescarregar){
+				if (configTask3.aguardaDescarregar){
 					xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade); break; // -
 				}	
 			default: break;
@@ -169,9 +169,9 @@ void trem_produtor(void *pvParameters){
 					digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 					digitalWrite(vetorLeds[(config -> id) - 1], HIGH); //O Led do trem da config -> id correspondente acende, indicando sua presença no pátio de descarga.
 					
-					config -> aguadaDescarregar = true;
+					config -> aguardaDescarregar = true;
 					if (xSemaphoreTake(config -> descarregar, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
-						config -> aguadaDescarregar = false;
+						config -> aguardaDescarregar = false;
 						xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
 						total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
 						if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
