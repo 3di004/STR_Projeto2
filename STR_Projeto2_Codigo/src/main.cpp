@@ -9,31 +9,34 @@
 #define Led3 21	//LED 3
 #define Led4 19	//LED 4
 
-byte vetorLeds[3] = {Led1, Led2, Led3}; //Vetor para acender os respectivos leds dentro das tasks criadas.
+uint8_t vetorLeds[3] = {Led1, Led2, Led3}; //Vetor para acender os respectivos leds dentro das tasks criadas.
+uint8_t vetorTasksAguardaDescarregar[2] = {0, 0};
 
 TaskHandle_t task1Handle, task2Handle, task3Handle, task4Handle; //Handles das tasks
 
 //Configurações do sistema
 int capacidade_patio = 2; //Quantidade de vagas no pátio.
 int total_no_patio = 0; //Variável contadora do número de trens no pátio.
-int randInt; //Número inteiro aleatório para descarregar o pátio.
 int delayDebounce = 750; //ms
 SemaphoreHandle_t vagas_patio = xSemaphoreCreateCounting(capacidade_patio, capacidade_patio); //Semáforo controlador das vagas do pátio, com a capacidade devida de 2 trens.
 SemaphoreHandle_t trilho_compartilhado = xSemaphoreCreateCounting(1, 1); //Semáforo para o trilho compartilhado, de capacidade 1.
-SemaphoreHandle_t botao_agente_descarregador; //Semáforo para permitir descarga dos trens.
 SemaphoreHandle_t serialMutex; //Mutex para controle de envio de mensagens ao Serial.
+
+//Configurações de descarga
+int randInt; //Número inteiro aleatório para descarregar o pátio.
+uint8_t resultado; //Resultado do sorteio para descarga do pátio.
 
 typedef struct { //Struct para definir atributos das configurações de cada task a partir da função genérica trem_produtor
 	int id;
 	SemaphoreHandle_t iniciar_rota;
 	SemaphoreHandle_t descarregar;
+	bool aguadaDescarregar;
 } ConfigTask_t;
 
 ConfigTask_t configTask1, configTask2, configTask3; //Variáveis de configuração (struct com 3 atributos)
 
 //Declaração de funções
 void trem_produtor(void*); //Função a ser repassada como tasks ao FreeRTOS, representando cada trem das linhas.
-void agente_descarregador(void*); //Função para liberação do pátio.
 
 //Rotinas de Serviço de Interrupção de Hardware pelos botões
 void IRAM_ATTR ISR_Bot1(){
@@ -76,10 +79,53 @@ void IRAM_ATTR ISR_Bot3(){
 void IRAM_ATTR ISR_Bot4(){
 	static TickType_t tempoAnt = 0;
 	TickType_t tempoAtu = xTaskGetTickCountFromISR();
-
+	
 	if (tempoAtu - tempoAnt >= pdMS_TO_TICKS(delayDebounce)){
 		BaseType_t taskMaiorPrioridade = pdFALSE;
-		xSemaphoreGiveFromISR(botao_agente_descarregador, &taskMaiorPrioridade);
+
+		//Lógica para avaliar quais tarefas esperam no pátio no momento dessa chamada
+		bool val1, val2, val3; //Valores booleanos paraconstruir as expressões de lógica
+		val1 = configTask1.aguadaDescarregar;
+		val2 = configTask2.aguadaDescarregar;
+		val3 = configTask3.aguadaDescarregar;
+		resultado = 0;
+		if ((!val1 and !val2 and val3) or (!val1 and val2 and !val3) or (val1 and !val2 and !val3)){ //Se só tem um trem esperando descarregar,
+			if (val1){xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade);}		 //descarregue-o
+			if (val2){xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade);}
+			if (val3){xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade);}
+		}
+		if ((!val1 and val2 and val3) or (val1 and !val2 and val3) or (val1 and val2 and !val3)){ //Se há dois trens esperando para descarregar,
+			if (!val1){																			  //e são so trens 2 e 3,
+				vetorTasksAguardaDescarregar[0] = 2;											  //armazena essa informação num vetor.
+				vetorTasksAguardaDescarregar[1] = 3;	
+			}
+			if (!val2){																			  //e são so trens 1 e 3,
+				vetorTasksAguardaDescarregar[0] = 1;											  //armazena essa informação num vetor.
+				vetorTasksAguardaDescarregar[1] = 3;	
+			}
+			if (!val3){																			  //e são so trens 1 e 2,
+				vetorTasksAguardaDescarregar[0] = 1;											  //armazena essa informação num vetor.
+				vetorTasksAguardaDescarregar[1] = 2;	
+			}
+			randInt = rand() % 2; //Sorteia um número (0 ou 1)
+			resultado = vetorTasksAguardaDescarregar[randInt]; //E pega o trem corresponendente do vetor para passar para o switch em seguida
+		}
+
+		switch (resultado){
+			case 1: 
+				if (configTask1.aguadaDescarregar){
+					xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade); break; //Se for 1, ativa o semáforo descarregar da tarefa 1.
+				}	
+			case 2: 
+				if (configTask2.aguadaDescarregar){
+					xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade); break; //Assim por diante.
+				}
+			case 3: 
+				if (configTask3.aguadaDescarregar){
+					xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade); break; // -
+				}	
+			default: break;
+		}
 		portYIELD_FROM_ISR(taskMaiorPrioridade);
 
 		tempoAnt = tempoAtu;
@@ -122,8 +168,10 @@ void trem_produtor(void *pvParameters){
 					}
 					digitalWrite(Led4, LOW); //Led indicador de trem no trilho compartilhado desliga.
 					digitalWrite(vetorLeds[(config -> id) - 1], HIGH); //O Led do trem da config -> id correspondente acende, indicando sua presença no pátio de descarga.
-
+					
+					config -> aguadaDescarregar = true;
 					if (xSemaphoreTake(config -> descarregar, portMAX_DELAY) == pdTRUE){ //enquanto o semáforo do agente descarregador estiver em 0 (não acionado e sorteado), a task fica presa aqui esperando. Quando a interrupção for chamada, vira 1 e executa as linhas seguintes.
+						config -> aguadaDescarregar = false;
 						xSemaphoreGive(vagas_patio); //O semáforo de controle do pátio decresce de uma unidade.
 						total_no_patio--; //O contador de trens no pátio descresce em uma unidade.
 						if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
@@ -139,20 +187,6 @@ void trem_produtor(void *pvParameters){
 	}
 }
 
-void agente_descarregador(void *pvParameters){ //Função que lida com a descarga dos trens no pátio.
-	while (true){
-		if (xSemaphoreTake(botao_agente_descarregador, portMAX_DELAY) == pdTRUE){ //Se o semáforo botao_agente_descarregador estiver em 1 (pressionado), continua.
-			int randInt = random(1, 4); //Atribui 1, 2 ou 3 à variável randInt.
-			switch (randInt){
-				case 1: xSemaphoreGive(configTask1.descarregar); break; //Se for 1, ativa o semáforo descarregar da tarefa 1.
-				case 2: xSemaphoreGive(configTask2.descarregar); break; //Assim por diante.
-				case 3: xSemaphoreGive(configTask3.descarregar); break; // -
-				default: break;
-			}
-		}
-	}
-
-}
 
 
 //Setup do das portas e das tasks.
@@ -181,9 +215,6 @@ void setup(){
 	configTask2.descarregar = xSemaphoreCreateBinary();
 	configTask3.descarregar = xSemaphoreCreateBinary();
 
-	//Definição do semáforo botao_agente_descarregador.
-	botao_agente_descarregador = xSemaphoreCreateBinary();
-
 	//Definição do mutex e atribuição de 1 (Serial disponível) para controle de envio de mensagens ao Serial.
 	serialMutex = xSemaphoreCreateBinary();
 	xSemaphoreGive(serialMutex);
@@ -197,7 +228,6 @@ void setup(){
 	xTaskCreate(trem_produtor, "Task Trem 1", 2048, (void*)&configTask1, 1, &task1Handle);
 	xTaskCreate(trem_produtor, "Task Trem 2", 2048, (void*)&configTask2, 1, &task2Handle);
 	xTaskCreate(trem_produtor, "Task Trem 3", 2048, (void*)&configTask3, 1, &task3Handle);
-	xTaskCreate(agente_descarregador, "Agente Descarregador", 2048, NULL, 1, &task4Handle);
 }
 
 //Loop: inutilizado.
