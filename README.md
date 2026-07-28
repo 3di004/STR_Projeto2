@@ -53,7 +53,7 @@ subgraph Tasks ["3. Tarefas"]
     Task3["Tarefa 3"]:::task
 end
 subgraph Saídas ["4. Hardware de Saída, LEDs"]
-    Led1["\n Vaga ocupada\n pelo trem 1"]:::saida
+    Led1["Led\n Vaga ocupada\n pelo trem 1"]:::saida
     Led2["Led\n Vaga ocupada\n pelo trem 2"]:::saida
     Led3["Led\n Vaga ocupada\n pelo trem 3"]:::saida
     Led4["Led\n Vaga no trilho\n compartilhado"]:::saida
