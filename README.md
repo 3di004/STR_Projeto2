@@ -9,7 +9,7 @@
 
 ## **Vídeo demonstrativo de funcionamento**
 
-YouTube: <youtube.com>
+YouTube: <https://youtu.be/1xG7K40JyUI>
 
 ## **Descrição**
 
