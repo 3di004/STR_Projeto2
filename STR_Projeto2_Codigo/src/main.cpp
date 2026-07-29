@@ -18,8 +18,8 @@ TaskHandle_t task1Handle, task2Handle, task3Handle, task4Handle; //Handles das t
 int capacidade_patio = 2; //Quantidade de vagas no pátio.
 int total_no_patio = 0; //Variável contadora do número de trens no pátio.
 int delayDebounce = 750; //ms
-SemaphoreHandle_t vagas_patio = xSemaphoreCreateCounting(capacidade_patio, capacidade_patio); //Semáforo controlador das vagas do pátio, com a capacidade devida de 2 trens.
-SemaphoreHandle_t trilho_compartilhado = xSemaphoreCreateCounting(1, 1); //Semáforo para o trilho compartilhado, de capacidade 1.
+SemaphoreHandle_t vagas_patio; //Semáforo controlador das vagas do pátio, com a capacidade devida de 2 trens.
+SemaphoreHandle_t trilho_compartilhado; //Semáforo para o trilho compartilhado, de capacidade 1.
 SemaphoreHandle_t serialMutex; //Mutex para controle de envio de mensagens ao Serial.
 
 //Configurações de descarga
@@ -31,6 +31,7 @@ typedef struct { //Struct para definir atributos das configurações de cada task 
 	SemaphoreHandle_t iniciar_rota;
 	SemaphoreHandle_t descarregar;
 	bool aguardaDescarregar;
+	bool rotaFinalizada;
 } ConfigTask_t;
 
 ConfigTask_t configTask1, configTask2, configTask3; //Variáveis de configuração (struct com 3 atributos)
@@ -45,8 +46,10 @@ void IRAM_ATTR ISR_Bot1(){
 
 	if (tempoAtu - tempoAnt >= pdMS_TO_TICKS(delayDebounce)){ //IF do debounce.
 		BaseType_t taskMaiorPrioridade = pdFALSE; //Define variável para ver se a prioridade da task na CPU é maior que da task na RAM
-		xSemaphoreGiveFromISR(configTask1.iniciar_rota, &taskMaiorPrioridade); //aumenta em 1 o valor do semáforo que permite a task ser iniciada, alterando o taskMaiorPrioridade para pdTRUE caso a task parada pelo semáforo tiver prioridade maior que a task interrompida pelo botão.
-		portYIELD_FROM_ISR(taskMaiorPrioridade); //Se taskMaiorPrioridade for pdTRUE, o scheduler pula direto para essa task.
+		if (configTask1.rotaFinalizada){
+			xSemaphoreGiveFromISR(configTask1.iniciar_rota, &taskMaiorPrioridade); //aumenta em 1 o valor do semáforo que permite a task ser iniciada, alterando o taskMaiorPrioridade para pdTRUE caso a task parada pelo semáforo tiver prioridade maior que a task interrompida pelo botão.
+			portYIELD_FROM_ISR(taskMaiorPrioridade); //Se taskMaiorPrioridade for pdTRUE, o scheduler pula direto para essa task.
+		}
 
 		tempoAnt = tempoAtu; //Atualização de tempoAnt.
 	}
@@ -58,8 +61,10 @@ void IRAM_ATTR ISR_Bot2(){
 
 	if (tempoAtu - tempoAnt >= pdMS_TO_TICKS(delayDebounce)){
 		BaseType_t taskMaiorPrioridade = pdFALSE;
-		xSemaphoreGiveFromISR(configTask2.iniciar_rota, &taskMaiorPrioridade);
-		portYIELD_FROM_ISR(taskMaiorPrioridade);
+		if (configTask2.rotaFinalizada){
+			xSemaphoreGiveFromISR(configTask2.iniciar_rota, &taskMaiorPrioridade);
+			portYIELD_FROM_ISR(taskMaiorPrioridade);
+		}
 
 		tempoAnt = tempoAtu;
 	}
@@ -70,8 +75,10 @@ void IRAM_ATTR ISR_Bot3(){
 
 	if (tempoAtu - tempoAnt >= pdMS_TO_TICKS(delayDebounce)){
 		BaseType_t taskMaiorPrioridade = pdFALSE;
-		xSemaphoreGiveFromISR(configTask3.iniciar_rota, &taskMaiorPrioridade);
-		portYIELD_FROM_ISR(taskMaiorPrioridade);
+		if (configTask3.rotaFinalizada){
+			xSemaphoreGiveFromISR(configTask3.iniciar_rota, &taskMaiorPrioridade);
+			portYIELD_FROM_ISR(taskMaiorPrioridade);
+		}
 
 		tempoAnt = tempoAtu;
 	}
@@ -93,6 +100,7 @@ void IRAM_ATTR ISR_Bot4(){
 			if (val1){xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade);}		 //descarregue-o
 			if (val2){xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade);}
 			if (val3){xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade);}
+			portYIELD_FROM_ISR(taskMaiorPrioridade);
 		}
 		if ((!val1 and val2 and val3) or (val1 and !val2 and val3) or (val1 and val2 and !val3)){ //Se há dois trens esperando para descarregar,
 			if (!val1){																			  //e são so trens 2 e 3,
@@ -109,24 +117,23 @@ void IRAM_ATTR ISR_Bot4(){
 			}
 			randInt = rand() % 2; //Sorteia um número (0 ou 1)
 			resultado = vetorTasksAguardaDescarregar[randInt]; //E pega o trem corresponendente do vetor para passar para o switch em seguida
+			switch (resultado){
+				case 1: 
+					if (configTask1.aguardaDescarregar){
+						xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade); break; //Se for 1, ativa o semáforo descarregar da tarefa 1.
+					}	
+				case 2: 
+					if (configTask2.aguardaDescarregar){
+						xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade); break; //Assim por diante.
+					}
+				case 3: 
+					if (configTask3.aguardaDescarregar){
+						xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade); break; // -
+					}	
+				default: break;
+			}
+			portYIELD_FROM_ISR(taskMaiorPrioridade);
 		}
-
-		switch (resultado){
-			case 1: 
-				if (configTask1.aguardaDescarregar){
-					xSemaphoreGiveFromISR(configTask1.descarregar, &taskMaiorPrioridade); break; //Se for 1, ativa o semáforo descarregar da tarefa 1.
-				}	
-			case 2: 
-				if (configTask2.aguardaDescarregar){
-					xSemaphoreGiveFromISR(configTask2.descarregar, &taskMaiorPrioridade); break; //Assim por diante.
-				}
-			case 3: 
-				if (configTask3.aguardaDescarregar){
-					xSemaphoreGiveFromISR(configTask3.descarregar, &taskMaiorPrioridade); break; // -
-				}	
-			default: break;
-		}
-		portYIELD_FROM_ISR(taskMaiorPrioridade);
 
 		tempoAnt = tempoAtu;
 	}
@@ -138,6 +145,7 @@ void trem_produtor(void *pvParameters){
 
 	while (true){ //loop contínuo (task sempre rodando)
 		if (xSemaphoreTake(config -> iniciar_rota, portMAX_DELAY) == pdTRUE){ //Se o semáforo iniciar_rota, do struct config estiver em 1 (botão do trem respectivo pressionado), continua
+			config -> rotaFinalizada = false;
 			
 			if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE){
 				Serial.print("[Linha "); Serial.print(config -> id); Serial.println("] Trem carregado e pronto para partir. Solicitando entrada no trilho compartilhado...");
@@ -183,6 +191,7 @@ void trem_produtor(void *pvParameters){
 					}
 				}
 			}
+			config -> rotaFinalizada = true;
 		}
 	}
 }
@@ -201,6 +210,11 @@ void setup(){
 	pinMode(Led3, OUTPUT); //Saída digital:
 	pinMode(Led4, OUTPUT); //Saída digital:
 
+	//Definição dos semáforos
+	vagas_patio = xSemaphoreCreateCounting(capacidade_patio, capacidade_patio);
+	trilho_compartilhado = xSemaphoreCreateBinary();
+	xSemaphoreGive(trilho_compartilhado);
+
 	//Definição das interrupções por botões
 	attachInterrupt(digitalPinToInterrupt(Bot1), ISR_Bot1, FALLING);
 	attachInterrupt(digitalPinToInterrupt(Bot2), ISR_Bot2, FALLING);
@@ -215,6 +229,7 @@ void setup(){
 	configTask2.descarregar = xSemaphoreCreateBinary();
 	configTask3.descarregar = xSemaphoreCreateBinary();
 
+
 	//Definição do mutex e atribuição de 1 (Serial disponível) para controle de envio de mensagens ao Serial.
 	serialMutex = xSemaphoreCreateBinary();
 	xSemaphoreGive(serialMutex);
@@ -223,6 +238,11 @@ void setup(){
 	configTask1.id = 1;
 	configTask2.id = 2;
 	configTask3.id = 3;
+
+	//Definição do estado rotaFinalizada.
+	configTask1.rotaFinalizada = true;
+	configTask2.rotaFinalizada = true;
+	configTask3.rotaFinalizada = true;
 
 	//Criação das tarefas. Cada ima recebe um nome, parâmetros da função genérica trem_produtor e uma handle para fins de padronização.
 	xTaskCreate(trem_produtor, "Task Trem 1", 2048, (void*)&configTask1, 1, &task1Handle);
